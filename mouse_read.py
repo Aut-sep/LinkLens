@@ -44,7 +44,7 @@ class TextReader:
     def read_selected_text(self):
         """ 核心读取逻辑（仅增加判断逻辑） """
         try:
-            # 保持原有剪贴板操作完全不变 ▼
+
             original = pyperclip.paste()
             self.safe_release_keys()
 
@@ -57,7 +57,7 @@ class TextReader:
 
             time.sleep(0.2)
             new_text = pyperclip.paste().strip()
-            # 保持原有剪贴板操作完全不变 ▲
+
 
             # 仅在输出前增加判断 ▼
             if new_text:
