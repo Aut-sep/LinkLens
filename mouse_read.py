@@ -20,7 +20,7 @@ class TextReader:
             self.read_selected_text()
 
     def _is_url(self, text):
-        """ 新增的URL验证方法（保持原有代码风格） """
+        """ URL验证方法 """
         # 基本格式验证
         pattern = re.compile(
             r'^(?:http|ftp)s?://|^'  # 允许无协议头
@@ -42,7 +42,7 @@ class TextReader:
             return False
 
     def read_selected_text(self):
-        """ 核心读取逻辑（仅增加判断逻辑） """
+        """ 读取逻辑（判断逻辑） """
         try:
 
             original = pyperclip.paste()
@@ -59,7 +59,7 @@ class TextReader:
             new_text = pyperclip.paste().strip()
 
 
-            # 仅在输出前增加判断 ▼
+            # 在输出前增加判断
             if new_text:
                 status = "✅ 检测到URL" if self._is_url(new_text) else "📝 普通文本"
                 print(f"{status}: {new_text}")
@@ -73,7 +73,7 @@ class TextReader:
             self.safe_release_keys()
 
     def safe_release_keys(self):
-        """ 安全释放按键（完全保持原样） """
+        """ 安全释放按键 """
         for key in [keyboard.Key.ctrl, 'c', keyboard.Key.alt, keyboard.Key.shift]:
             try:
                 self.keyboard.release(key)
@@ -81,7 +81,7 @@ class TextReader:
                 pass
 
     def run(self):
-        """ 启动监听（完全保持原样） """
+        """ 启动监听 """
         print("🔥 热键监听已启动 (Alt+Shift+Q)")
         print("⏳ 现在可以选中文本后按热键读取")
         self.hotkey_listener.start()
