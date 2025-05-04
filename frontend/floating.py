@@ -11,7 +11,7 @@ class FloatingWindow(QWidget):
         self.drag_pos = QPoint()
 
     def setup_ui(self):
-        # 窗口基础设置
+        # 窗口设置
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setMinimumSize(300, 200)
