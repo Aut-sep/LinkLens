@@ -70,7 +70,7 @@ class VolcEngineChatBot:
             readline.set_completer(self._command_completer)
             readline.parse_and_bind("tab: complete")
         
-        # 设置历史记录长度（仅非Windows系统）
+        # 设置历史记录长度
         if platform.system() != "Windows":
             readline.set_history_length(100)
 
