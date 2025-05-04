@@ -13,7 +13,7 @@ class LinkLensApp:
         self.window.fade_in()
         self.window.move(100, 100)  # 初始位置
         
-        # 模拟2秒后收到AI结果
+        # 模拟2秒后收到结果
         QTimer.singleShot(2000, self.demo_update_content)
 
     def demo_update_content(self):
