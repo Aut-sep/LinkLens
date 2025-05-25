@@ -1,17 +1,21 @@
 import sys
 import os
 import re
+import requests
 from typing import Optional
 from colorama import Fore
+from bs4 import BeautifulSoup
 
 # 添加父目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common import BaseBot
+from backend.common import BaseBot
 
 class SummaryBot(BaseBot):
     def __init__(self):
         super().__init__()  # 初始化基类
         self.client = self._initialize_client()  # 添加客户端初始化
+        self.timeout = 10  # 默认超时时间(秒)
+        self.max_retries = 3  # 最大重试次数
         self.summary_config = {
             "model": "doubao-1.5-lite-32k-250115",
             "temperature": 0.3,
@@ -39,12 +43,20 @@ class SummaryBot(BaseBot):
                 {"role": "user", "content": f"标题：{title}\n正文：{cleaned_text}"}
             ]
             
-            response = self.client.chat.completions.create(
-                model=self.summary_config["model"],  # 修正为使用总结配置的模型
-                messages=messages,
-                temperature=self.summary_config["temperature"],
-                max_tokens=self.summary_config["max_tokens"]
-            )
+            for attempt in range(self.max_retries):
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.summary_config["model"],
+                        messages=messages,
+                        temperature=self.summary_config["temperature"],
+                        max_tokens=self.summary_config["max_tokens"],
+                        timeout=self.timeout
+                    )
+                    break
+                except requests.exceptions.Timeout:
+                    if attempt == self.max_retries - 1:
+                        raise
+                    time.sleep(1)  # 等待1秒后重试
             
             if response.choices:
                 return self._format_summary(response.choices[0].message.content)
@@ -58,3 +70,28 @@ class SummaryBot(BaseBot):
         """统一处理输出格式"""
         clean_text = raw_text.replace("**", "").replace("#", "")
         return '\n'.join([line.strip() for line in clean_text.split('\n') if line.strip()])
+        
+    def get_summary(self, url: str) -> Optional[str]:
+        """
+        公共方法：获取URL内容的摘要
+        Args:
+            url: 要摘要的URL
+        Returns:
+            格式化后的摘要内容或None
+        """
+        try:
+            # 获取网页内容
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            # 提取标题和正文
+            soup = BeautifulSoup(response.text, 'html.parser')
+            title = soup.title.string if soup.title else "无标题"
+            text = soup.get_text()
+            
+            # 调用自动摘要
+            return self.auto_summarize(text, title)
+            
+        except Exception as e:
+            print(f"{Fore.RED}获取摘要失败: {str(e)}")
+            return None
