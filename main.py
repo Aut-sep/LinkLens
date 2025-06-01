@@ -42,7 +42,7 @@ class MainProcessor:
         print(f"📌 SummaryBot状态: {'正常' if hasattr(self.summary_bot, 'get_summary') else '异常'}")
         
         def on_text_selected(text):
-            print(f"📥 接收到文本: {text}")
+            print(f"\n📥 接收到文本: {text}")
             if hasattr(self.text_reader, 'hotkey_listener') and self.text_reader.hotkey_listener.is_alive():
                 if self.text_reader._is_url(text):
                     print("🔗 检测到有效URL，开始处理...")
@@ -59,7 +59,7 @@ class MainProcessor:
         print("🚀 系统已启动，请使用Alt+Shift+Q触发读取")
         try:
             self.text_reader.hotkey_listener.start()
-            print("🛜 热键监听器已成功启动")
+            print("🔥 热键监听器已成功启动")
             # 保持主线程运行
             while True:
                 time.sleep(1)
