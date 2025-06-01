@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.common import BaseBot
 
+
 class SummaryBot(BaseBot):
     def __init__(self):
         super().__init__()  # 初始化基类
@@ -26,13 +27,13 @@ class SummaryBot(BaseBot):
                 "2. 根据文章标题确定核心主题\n"
                 "3. 忽略与文章主体无关的广告、推广信息\n"
                 "4. 使用简洁的bullet points格式输出（3-5个要点）\n"
-                "5. 最后换行并用【总结】结尾"
-            )
+                "5. 最后【总结】全文"
+            ),
         }
 
     def clean_text(self, raw_text: str) -> str:
         """文本清洗"""
-        return re.sub(r'<.*?>|广告联系.*|\d{3}-\d{8}', '', raw_text)
+        return re.sub(r"<.*?>|广告联系.*|\d{3}-\d{8}", "", raw_text)
 
     def auto_summarize(self, text: str, title: str) -> Optional[str]:
         """文本总结入口"""
@@ -40,9 +41,9 @@ class SummaryBot(BaseBot):
         try:
             messages = [
                 {"role": "system", "content": self.summary_config["system_prompt"]},
-                {"role": "user", "content": f"标题：{title}\n正文：{cleaned_text}"}
+                {"role": "user", "content": f"标题：{title}\n正文：{cleaned_text}"},
             ]
-            
+
             for attempt in range(self.max_retries):
                 try:
                     response = self.client.chat.completions.create(
@@ -50,27 +51,29 @@ class SummaryBot(BaseBot):
                         messages=messages,
                         temperature=self.summary_config["temperature"],
                         max_tokens=self.summary_config["max_tokens"],
-                        timeout=self.timeout
+                        timeout=self.timeout,
                     )
                     break
                 except requests.exceptions.Timeout:
                     if attempt == self.max_retries - 1:
                         raise
                     time.sleep(1)  # 等待1秒后重试
-            
+
             if response.choices:
                 return self._format_summary(response.choices[0].message.content)
             return "总结生成失败"
-            
+
         except Exception as e:
             print(f"{Fore.RED}总结失败: {str(e)}")
             return None
-    
+
     def _format_summary(self, raw_text: str) -> str:
         """统一处理输出格式"""
         clean_text = raw_text.replace("**", "").replace("#", "")
-        return '\n'.join([line.strip() for line in clean_text.split('\n') if line.strip()])
-        
+        return "\n".join(
+            [line.strip() for line in clean_text.split("\n") if line.strip()]
+        )
+
     def get_summary(self, url: str) -> Optional[str]:
         """
         公共方法：获取URL内容的摘要
@@ -83,15 +86,15 @@ class SummaryBot(BaseBot):
             # 获取网页内容
             response = requests.get(url)
             response.raise_for_status()
-            
+
             # 提取标题和正文
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, "html.parser")
             title = soup.title.string if soup.title else "无标题"
             text = soup.get_text()
-            
+
             # 调用自动摘要
             return self.auto_summarize(text, title)
-            
+
         except Exception as e:
             print(f"{Fore.RED}获取摘要失败: {str(e)}")
             return None

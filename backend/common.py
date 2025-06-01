@@ -2,8 +2,10 @@ import os
 import sys
 from volcenginesdkarkruntime import Ark
 
+
 class BaseBot:
     """公共基础类"""
+
     def _initialize_client(self) -> Ark:
         """共享的客户端初始化方法"""
         ak = os.getenv("VOLC_ACCESSKEY")
