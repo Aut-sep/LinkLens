@@ -69,4 +69,5 @@ class MainProcessor:
 
 if __name__ == "__main__":
     processor = MainProcessor()
+    processor.summary_bot.debug = True
     processor.run()

@@ -82,6 +82,17 @@ class SummaryBot(BaseBot):
         Returns:
             格式化后的摘要内容或None
         """
+        if getattr(self, "debug", False):
+            return (
+                "模拟测试摘要：\n"
+                "- 核心内容要点总结1\n"
+                "- 核心内容要点总结2\n"
+                "- 核心内容要点总结3\n"
+                "- 核心内容要点总结4\n"
+                "- 核心内容要点总结5\n"
+                "【总结】测试用模拟摘要，这段文字约70 tokens"
+            )
+
         try:
             # 获取网页内容
             response = requests.get(url)
