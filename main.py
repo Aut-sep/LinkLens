@@ -1,3 +1,5 @@
+# main.py
+
 import threading
 import time
 from backend.mouse_read import TextReader
@@ -14,57 +16,69 @@ class MainProcessor:
         self.lock = threading.Lock()
         print("🔒 线程锁已创建")
 
-    def process_url(self, url):
-        """处理URL的完整流程"""
-        with self.lock:
-            print(f"🔗 开始处理URL: {url}")
+        self._original_trigger = self.text_reader.trigger_read
+        self._original_read = self.text_reader.read_selected_text
 
-            # 获取摘要
-            summary = self.summary_bot.get_summary(url)
-            if summary:
-                print(f"📝 摘要生成成功:\n{summary}")
-            else:
-                print("⚠️ 摘要生成失败")
+        self.text_reader.trigger_read = self._trigger_and_summarize
+
+    def _process_text(self, text: str):
+        """判断 URL 并摘要，否则打印提示。"""
+        if not text:
+            print("\n📥 没有读取到文本")
+            return
+
+        print(f"\n📥 文本: {repr(text)}")
+        if self.text_reader._is_url(text):
+            print("🔗 检测到有效URL，开始处理...")
+            with self.lock:
+                print(f"🔗 开始处理URL: {text}")
+                summary = self.summary_bot.get_summary(text)
+                if summary:
+                    print(f"📝 摘要生成成功:\n{summary}")
+                else:
+                    print("⚠️ 摘要生成失败")
+        else:
+            print(f"❌ 不是有效的URL: {repr(text)}")
+
+    def _trigger_and_summarize(self):
+        """先调用原 trigger，再拿文本摘要。"""
+        self._original_trigger()
+        text = self.text_reader.read_selected_text(print_result=False)
+        self._process_text(text)
 
     def run(self):
-        """启动主处理流程"""
+        """启动监听，替换 read_selected_text，主线程保持运行。"""
         print("🔍 检查模块初始化状态...")
-        print(
-            f"📌 TextReader状态: {'正常' if hasattr(self.text_reader, 'hotkey_listener') else '异常'}"
-        )
-        print(
-            f"📌 SummaryBot状态: {'正常' if hasattr(self.summary_bot, 'get_summary') else '异常'}"
-        )
+        if not hasattr(self.text_reader, "read_selected_text"):
+            print("⚠️ TextReader 缺少 read_selected_text")
+        if not hasattr(self.summary_bot, "get_summary"):
+            print("⚠️ SummaryBot 缺少 get_summary")
 
-        def on_text_selected(text):
-            print(f"\n📥 接收到文本: {text}")
-            if (
-                hasattr(self.text_reader, "hotkey_listener")
-                and self.text_reader.hotkey_listener.is_alive()
-            ):
-                if self.text_reader._is_url(text):
-                    print("🔗 检测到有效URL，开始处理...")
-                    self.process_url(text)
-                else:
-                    print(f"❌ 不是有效的URL: {text}")
-            else:
-                print("⚠️ 热键监听器未启动或已停止，请先确保热键监听器正常运行")
+        self.text_reader.read_selected_text = self._patched_read_selected_text
 
-        # 修改TextReader的回调
-        original_read = self.text_reader.read_selected_text
-        self.text_reader.read_selected_text = (
-            lambda print_result=False: on_text_selected(original_read(print_result))
-        )
-
-        print("🚀 系统已启动，请使用Alt+Shift+Q触发读取")
+        print("🚀 系统启动完成，按 Alt+Shift+Q 触发")
         try:
             self.text_reader.hotkey_listener.start()
             print("🔥 热键监听器已成功启动")
-            # 保持主线程运行
+
             while True:
                 time.sleep(1)
+
+        except KeyboardInterrupt:
+            try:
+                self.text_reader.stop()
+            except Exception:
+                pass
+            print("🛑 程序由用户中断，正在退出...")
+
         except Exception as e:
             print(f"⚠️ 热键监听器启动失败: {e}")
+
+    def _patched_read_selected_text(self, print_result=False) -> str:
+        """调用原 read，直接摘要并返回文本。"""
+        text = self._original_read(print_result)
+        self._process_text(text)
+        return text
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
+# backend/mouse_read.py
+
 import time
 import re
 import pyperclip
+from frontend.float_window import show_floating  # 调用刚才改成子进程模式的模块
 from pynput import keyboard
 from urllib.parse import urlparse
 from threading import Lock
@@ -20,8 +23,15 @@ class TextReader:
 
     def trigger_read(self):
         """热键触发入口"""
+        print("▶▶▶ trigger_read() 已被调用")    # debug
         with self.lock:
-            self.read_selected_text()
+            # 先取到选中的文本
+            text = self.read_selected_text()
+            print(f"   — 读取到的文本: {repr(text)}")   # debug
+            try:
+                show_floating(text)
+            except Exception as e:
+                print(f"❌ show_floating 出现错误: {e}")    # debug
 
     def _is_url(self, text):
         """URL验证方法"""
