@@ -5,6 +5,7 @@ import subprocess
 import os
 from urllib.parse import quote_plus
 
+
 def show_floating(text=None):
     """
     每次都启动一个新的 Python 子进程去跑 float_window_app.py，

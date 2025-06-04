@@ -1,6 +1,9 @@
+# backend/summary_bot.py
+
 import sys
 import os
 import re
+import time
 import requests
 from typing import Optional
 from colorama import Fore
@@ -83,6 +86,8 @@ class SummaryBot(BaseBot):
             格式化后的摘要内容或None
         """
         if getattr(self, "debug", False):
+            # 模拟网络请求延迟，方便前端显示“加载中…”效果
+            time.sleep(2)
             return (
                 "模拟测试摘要：\n"
                 "- 核心内容要点总结1\n"

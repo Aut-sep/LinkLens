@@ -3,8 +3,9 @@
 import time
 import re
 import pyperclip
-from frontend.float_window import show_floating  # 调用刚才改成子进程模式的模块
+from frontend.float_window import show_floating
 from pynput import keyboard
+from pynput import mouse
 from urllib.parse import urlparse
 from threading import Lock
 
@@ -23,15 +24,23 @@ class TextReader:
 
     def trigger_read(self):
         """热键触发入口"""
-        print("▶▶▶ trigger_read() 已被调用")    # debug
         with self.lock:
-            # 先取到选中的文本
+            # 1. 先取到选中的文本
             text = self.read_selected_text()
             print(f"   — 读取到的文本: {repr(text)}")   # debug
+
+            # 2. 立刻获取当前鼠标在屏幕上的全局坐标
             try:
-                show_floating(text)
+                m = mouse.Controller()
+                x, y = m.position   # 返回一个 (x, y) 元组，单位是屏幕像素坐标
+                print(f"   — 当前鼠标坐标: ({x}, {y})") # debug
             except Exception as e:
-                print(f"❌ show_floating 出现错误: {e}")    # debug
+                # 如果获取不到，就把坐标设成 None
+                print(f"⚠️ 获取鼠标坐标失败: {e}")  # debug
+                x, y = None, None
+
+        # 3. 把 text 传给前端显示
+        show_floating(text)
 
     def _is_url(self, text):
         """URL验证方法"""
@@ -81,8 +90,7 @@ class TextReader:
             # 在输出前增加判断
             if print_result:
                 if new_text:
-                    status = "✅ 检测到URL" if self._is_url(new_text) else "📝 普通文本"
-                    print(f"{status}: {new_text}")
+                    print(f"\n📝 {new_text}")
                 else:
                     print("⚠️ 未获取到有效内容")
 

@@ -2,8 +2,15 @@
 
 import threading
 import time
+import os
+import uuid
+import tempfile
 from backend.mouse_read import TextReader
 from backend.summary_bot import SummaryBot
+from frontend.float_window import show_floating
+
+# 额外导入，用来重新创建热键监听器
+from pynput import keyboard  
 
 
 class MainProcessor:
@@ -16,48 +23,86 @@ class MainProcessor:
         self.lock = threading.Lock()
         print("🔒 线程锁已创建")
 
-        self._original_trigger = self.text_reader.trigger_read
+        # 保存原始的 “只读取剪贴板并打印调试” 方法
         self._original_read = self.text_reader.read_selected_text
 
-        self.text_reader.trigger_read = self._trigger_and_summarize
+        # --------------- 关键修改：重新创建 HotKeys 监听器 ---------------
+        # 不再使用 text_reader.__init__ 中那个早先创建的 hotkey_listener，
+        # 而是用新的 mapping 把 <alt>+<shift>+q 直接指向 _trigger_and_summarize
+        self.text_reader.hotkey_listener = keyboard.GlobalHotKeys(
+            {
+                "<alt>+<shift>+q": self._trigger_and_summarize,
+                "<alt>+<shift>+w": self.text_reader.stop,
+            }
+        )
+        # ------------------------------------------------------------------
 
-    def _process_text(self, text: str):
-        """判断 URL 并摘要，否则打印提示。"""
+    def _process_text_and_write(self, text: str, tmp_path: str):
+        """后台线程：判断 URL 并写摘要到 tmp_path。"""
         if not text:
-            print("\n📥 没有读取到文本")
-            return
-
-        print(f"\n📥 文本: {repr(text)}")
-        if self.text_reader._is_url(text):
-            print("🔗 检测到有效URL，开始处理...")
-            with self.lock:
-                print(f"🔗 开始处理URL: {text}")
+            summary = "\n⚠️ 没有读取到文本"
+        else:
+            print(f"📥 文本: {repr(text)}")
+            if self.text_reader._is_url(text):
+                print("🔗 检测到有效URL，开始处理...")
                 summary = self.summary_bot.get_summary(text)
                 if summary:
-                    print(f"📝 摘要生成成功:\n{summary}")
+                    print(f"📝 摘要生成成功")
                 else:
-                    print("⚠️ 摘要生成失败")
-        else:
-            print(f"❌ 不是有效的URL: {repr(text)}")
+                    summary = "⚠️ 摘要生成失败"
+            else:
+                summary = f"❌ 不是有效的URL: {repr(text)}"
+
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(summary)
+        except Exception as e:
+            print(f"❌ 无法写入临时文件 {tmp_path}：{e}")
 
     def _trigger_and_summarize(self):
-        """先调用原 trigger，再拿文本摘要。"""
-        self._original_trigger()
-        text = self.text_reader.read_selected_text(print_result=False)
-        self._process_text(text)
+        """
+        热键按下时执行：
+        1. 先调用原来的 read_selected_text 拿到剪贴板文本并打印 
+        2. 生成一个临时文件 tmp_path，用于“主进程 -> 悬浮窗”的通信
+        3. 立刻弹出一个悬浮窗，内容为“加载中…”，并把 uuid 传给前端
+        4. 在后台线程里拿到摘要并写回 tmp_path，前端检测到后更新显示
+        """
+        # —— 1. 先读剪贴板、打印调试 —— 
+        text = self._original_read(print_result=True)
+
+        # —— 2. 生成 UUID，并建立对应的空文件 —— 
+        uuid_str = str(uuid.uuid4())
+        tmp_path = os.path.join(tempfile.gettempdir(), f"float_{uuid_str}.txt")
+        try:
+            with open(tmp_path, "w", encoding="utf-8"):
+                pass
+        except Exception as e:
+            print(f"❌ 无法创建临时文件 {tmp_path}：{e}")
+            return
+
+        # —— 3. 立刻弹出“加载中…”悬浮窗 —— 
+        print(f"🌀 正在弹出“加载中…”悬浮窗，UUID={uuid_str}")  # <— 这行现在应该能打印了
+        show_floating(f"LOADING::{uuid_str}")
+
+        # —— 4. 后台线程去抓取摘要并写回 tmp_path —— 
+        worker = threading.Thread(
+            target=self._process_text_and_write, 
+            args=(text, tmp_path),
+            daemon=True
+        )
+        worker.start()
 
     def run(self):
-        """启动监听，替换 read_selected_text，主线程保持运行。"""
+        """启动监听。"""
         print("🔍 检查模块初始化状态...")
         if not hasattr(self.text_reader, "read_selected_text"):
             print("⚠️ TextReader 缺少 read_selected_text")
         if not hasattr(self.summary_bot, "get_summary"):
             print("⚠️ SummaryBot 缺少 get_summary")
 
-        self.text_reader.read_selected_text = self._patched_read_selected_text
-
         print("🚀 系统启动完成，按 Alt+Shift+Q 触发")
         try:
+            # 这里启动的是我们新建的 hotkey_listener，而非 TextReader 内部初始化的那个
             self.text_reader.hotkey_listener.start()
             print("🔥 热键监听器已成功启动")
 
@@ -73,12 +118,6 @@ class MainProcessor:
 
         except Exception as e:
             print(f"⚠️ 热键监听器启动失败: {e}")
-
-    def _patched_read_selected_text(self, print_result=False) -> str:
-        """调用原 read，直接摘要并返回文本。"""
-        text = self._original_read(print_result)
-        self._process_text(text)
-        return text
 
 
 if __name__ == "__main__":
