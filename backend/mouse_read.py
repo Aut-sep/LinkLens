@@ -18,7 +18,7 @@ class TextReader:
         self.hotkey_listener = keyboard.GlobalHotKeys(
             {
                 "<alt>+<shift>+q": self.trigger_read,
-                "<alt>+<shift>+w": self.stop,
+                # "<alt>+<shift>+w": self.stop,
             }
         )
         # 标记：上一次成功读出的内容，用于去重

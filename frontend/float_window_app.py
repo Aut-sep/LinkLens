@@ -3,31 +3,42 @@
 import sys
 import os
 import tempfile
+import json
 from PyQt5 import QtWidgets, QtCore, QtGui
 from urllib.parse import unquote_plus
+
+# 配置文件路径应与 settings.py 保持一致
+CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".linklens", "config.json")
 
 
 class FloatingWindow(QtWidgets.QWidget):
     def __init__(self, raw_arg=None):
-        # 如果 raw_arg 解码后是空字符串，就直接退出，不显示窗口
+        # 解码参数
         decoded_arg = unquote_plus(raw_arg or "")
+
+        # 如果是空字符串，则退出
         if not decoded_arg:
             QtWidgets.QApplication.quit()
             return
 
-        # 去掉标题栏、置顶、允许透明背景
+        # 判断是否是“示例预览模式”
+        is_preview = False
+        preview_text = ""
+        if decoded_arg.startswith("PREVIEW::"):
+            is_preview = True
+            preview_text = decoded_arg.split("::", 1)[1]
+
+        # —— 通用窗口属性：去掉标题栏、置顶、允许透明背景 —— #
         flags = QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint
         super().__init__(flags=flags)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
-        # 用于储存初始窗口位置，以便后续显示摘要时保持位置一致
         self.initial_pos = None
+        self._timer = None
 
-        self._timer = None  # 轮询线程用的定时器
-
-        # ---------- 构造 UI ----------
+        # ---------- 构造 UI ---------- #
         container = QtWidgets.QWidget(self)
         container.setObjectName("container")
         container_layout = QtWidgets.QVBoxLayout(container)
@@ -35,11 +46,7 @@ class FloatingWindow(QtWidgets.QWidget):
 
         self.label = QtWidgets.QLabel("")
         self.label.setWordWrap(True)
-        self.label.setStyleSheet("color: white; font-size: 12pt;")
-        # 让标签随内容扩展
-        self.label.setSizePolicy(
-            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
-        )
+        # 样式暂时留空，后面根据配置替换
         container_layout.addWidget(self.label)
 
         container.setStyleSheet(
@@ -54,120 +61,165 @@ class FloatingWindow(QtWidgets.QWidget):
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(container)
-        # --------------------------------
 
-        # 根据传入参数决定是“加载中…”还是直接显示
+        # 如果是“示例预览”模式
+        if is_preview:
+            self._apply_style_and_show(preview_text)
+            return  # 不进入“LOADING::”或轮询逻辑
+
+        # —— 否则，和原先代码保持一致：判断是 LOADING:: 还是 直接显示 —— #
         self._handle_arg(raw_arg)
 
         # 第一次根据标签内容自动调整尺寸
         self.adjustSize()
 
+    def _apply_style_and_show(self, text: str):
+        """
+        专用于“PREVIEW::”模式：
+        1) 从配置文件里读取字体/颜色/不透明度
+        2) 应用到 QLabel 和窗口
+        3) 直接 show() 并在屏幕右下角弹出示例
+        """
+        # 1. 读取当前配置
+        font_family = "Sans Serif"
+        font_size = 12
+        font_color = "#FFFFFF"
+        window_opacity = 0.8
+
+        try:
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    font_family = cfg.get("font_family", font_family)
+                    font_size = cfg.get("font_size", font_size)
+                    font_color = cfg.get("font_color", font_color)
+                    window_opacity = cfg.get("window_opacity", window_opacity)
+        except:
+            pass  # 如有任何错误，用默认
+
+        # 2. 设置标签文字与样式
+        self.label.setText(text)
+        font = QtGui.QFont(font_family, font_size)
+        self.label.setFont(font)
+        # 字体颜色
+        self.label.setStyleSheet(f"color: {font_color};")
+
+        # 3. 调整窗口整体不透明度
+        self.setWindowOpacity(window_opacity)
+
+        # 4. 调整大小后再定位到屏幕右下或鼠标附近
+        self.adjustSize()
+        w = self.width()
+        h = self.height()
+        cursor_point = QtGui.QCursor.pos()
+        screen = QtWidgets.QApplication.screenAt(cursor_point)
+        if screen:
+            geo = screen.availableGeometry()
+            # 尽量出现在鼠标偏右下方，若越界则调整
+            offset = 12
+            x = cursor_point.x() + offset
+            y = cursor_point.y() + offset
+            if x + w + 5 > geo.right():
+                x = geo.right() - w - 5
+            if y + h + 5 > geo.bottom():
+                y = cursor_point.y() - offset - h
+                if y < geo.top() + 5:
+                    y = geo.top() + 5
+            if x < geo.left() + 5:
+                x = geo.left() + 5
+            if y < geo.top() + 5:
+                y = geo.top() + 5
+            self.move(x, y)
+
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def _handle_arg(self, raw_arg):
         """
-        如果 raw_arg 以 "LOADING::" 开头，就进入“加载中…”模式并启动定时轮询。
-        否则直接把 raw_arg 解码后显示（不截断长文本）。
+        如果 raw_arg 以 "LOADING::" 开头，就进入“加载中…”模式并启动轮询。
+        否则直接解码后显示完整文本。
         """
+        decoded_arg = unquote_plus(raw_arg or "")
         if raw_arg and raw_arg.startswith("LOADING::"):
             parts = raw_arg.split("::", 1)
             if len(parts) == 2:
                 uuid_str = parts[1]
                 tmp_path = os.path.join(tempfile.gettempdir(), f"float_{uuid_str}.txt")
-                # 先把标签设为“加载中…”
                 self.label.setText("加载中…")
-                # 构造轮询定时器：每300ms去检查 tmp_path
+                # 轮询定时器
                 self._timer = QtCore.QTimer(self)
                 self._timer.setInterval(300)
                 self._timer.timeout.connect(lambda: self._check_temp_file(tmp_path))
                 self._timer.start()
             else:
-                # 格式异常，直接解码显示
-                self.label.setText(unquote_plus(raw_arg))
+                # 格式异常，直接当普通显示
+                self.label.setText(decoded_arg)
         else:
-            # 普通模式，直接解码显示完整文本
-            self.label.setText(unquote_plus(raw_arg or ""))
+            # 普通模式，直接显示
+            self.label.setText(decoded_arg)
 
     def _check_temp_file(self, tmp_path):
         """
-        定时轮询：如果发现 tmp_path 有非空内容，就把 label 换成摘要，
-        然后手动计算高度，调用 resize(400, height)，最后 move(pos)。
+        “加载中…”时定时轮询 tmp_path，如果文件内容有了，就更新 label 并调整大小、定位。
         """
         try:
             if os.path.exists(tmp_path):
                 with open(tmp_path, "r", encoding="utf-8") as f:
                     content = f.read().strip()
                 if content:
-                    # ——（1）先把文本更新到 QLabel —— 
+                    # 更新文字
                     self.label.setText(content)
-
-                    # ——（2）停止定时器 —— 
+                    # 停止轮询
                     if self._timer:
                         self._timer.stop()
                         self._timer = None
-
-                    # ——（3）删除临时文件（可选）—— 
+                    # 删除临时文件
                     try:
                         os.remove(tmp_path)
                     except:
                         pass
 
-                    # ——（4）彻底清除“最小尺寸/最小高度”约束 —— 
-                    #      让Windows/Qt 不要再把窗口强制撑到 243px 以上
+                    # 清除最小尺寸约束
                     self.setMinimumSize(0, 0)
                     self.setMinimumHeight(0)
                     self.setMaximumHeight(16777215)
 
-                    # ——（5）锁定固定宽度 —— 
+                    # 固定宽度 500 px
                     fixed_w = 500
                     self.setFixedWidth(fixed_w)
 
-                    # ——（6）手动计算“内容+padding”后的高度 —— 
-
-                    # 6.1 先让 label 固定一个宽度：400 减去左右各15的 padding（container_layout 中设置的 margins）
+                    # 计算内容高度
                     label_target_width = fixed_w - 15 * 2
                     self.label.setFixedWidth(label_target_width)
-
-                    # 6.2 调用 label.adjustSize()，让它自己根据内容算出高度
                     self.label.adjustSize()
                     label_h = self.label.height()
-
-                    # 6.3 container 的上下也各 15px，所以总高度 = label_h + 15*2
                     total_h = label_h + 15 * 2
-
-                    # ——（7）调用 resize，将整个浮窗设置为 400×total_h —— 
-                    #      Windows 会检查“我们要的高度是不是 >= 最小跟踪高度”，
-                    #      只要 total_h 稍微大于实际的文字所需高度，肯定可以 pass。
                     self.resize(fixed_w, total_h)
 
-                    # ——（8）最后做边界检查并 move —— 
+                    # 最后做边界检查并 move
                     x = self.initial_pos.x()
                     y = self.initial_pos.y()
                     screen = QtWidgets.QApplication.screenAt(self.initial_pos)
                     if screen:
                         geo = screen.availableGeometry()
-                        # 右边越界就往左移
                         if x + fixed_w + 5 > geo.right():
                             x = geo.right() - fixed_w - 5
-                        # 下边越界就往上移
                         if y + total_h + 5 > geo.bottom():
                             y = geo.bottom() - total_h - 5
-                        # 不要贴屏幕左/上缘
                         if x < geo.left() + 5:
                             x = geo.left() + 5
                         if y < geo.top() + 5:
                             y = geo.top() + 5
-
                     self.move(x, y)
 
         except Exception:
-            # 如果读文件或计算大小时挂了，下次定时器继续尝试
-            pass
+            pass  # 出错也不影响后续轮询
 
     def showEvent(self, event: QtGui.QShowEvent):
         super().showEvent(event)
-        # 保证窗口展示时立刻获得焦点
         self.activateWindow()
         self.setFocus(QtCore.Qt.MouseFocusReason)
-        # 在首次 show 时记录初始位置
         if self.initial_pos is None:
             self.initial_pos = self.pos()
 
@@ -185,9 +237,7 @@ class FloatingWindow(QtWidgets.QWidget):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent):
-        if getattr(self, "_drag_active", False) and (
-            event.buttons() & QtCore.Qt.LeftButton
-        ):
+        if getattr(self, "_drag_active", False) and (event.buttons() & QtCore.Qt.LeftButton):
             new_pos = event.globalPos() - self._drag_start_pos
             self.move(new_pos)
             event.accept()
@@ -203,56 +253,44 @@ class FloatingWindow(QtWidgets.QWidget):
 
 
 if __name__ == "__main__":
-    # 从命令行参数里取 raw_arg 并解码
     text = ""
     if len(sys.argv) > 1:
         text = unquote_plus(sys.argv[1] or "")
-
-    # 如果 text 为空，则直接退出
     if not text:
         sys.exit(0)
 
     app = QtWidgets.QApplication(sys.argv)
     win = FloatingWindow(text)
-
-    # 如果 FloatingWindow 构造里已经 quit 了，就不用再 show 了
     if not isinstance(win, FloatingWindow):
         sys.exit(0)
-
-    # 初次弹出时，先调整尺寸，再定位
     win.show()
-    win.adjustSize()  # 保证第一次根据“加载中...”文本调整大小
+    win.adjustSize()
 
+    # 定位逻辑与普通情况一致(不再赘述)
     w = win.width()
     h = win.height()
     cursor_point = QtGui.QCursor.pos()
-    target_x = cursor_point.x()
-    target_y = cursor_point.y()
     screen = QtWidgets.QApplication.screenAt(cursor_point)
     screen_geo = screen.availableGeometry()
     screen_w = screen_geo.width()
     screen_h = screen_geo.height()
 
-    x = screen_w - w - 20
-    y = screen_h - h - 50
-
-    if target_x is not None and target_y is not None:
-        offset = 12
-        x = target_x + offset
-        y = target_y + offset
-
-        if target_y + offset + h > screen_h:
-            y = target_y - offset - h
-            if y < 5:
-                y = 5
-
-        if x + w + 5 > screen_w:
-            x = screen_w - w - 5
-        if y + h + 5 > screen_h:
-            y = screen_h - h - 5
+    x = cursor_point.x() + 12
+    y = cursor_point.y() + 12
+    if x + w + 5 > screen_w:
+        x = cursor_point.x() - 12 - w
+        if x < 5:
+            x = 5
+    if y + h + 5 > screen_h:
+        y = cursor_point.y() - 12 - h
+        if y < 5:
+            y = 5
+    if x < 5:
+        x = 5
+    if y < 5:
+        y = 5
 
     win.move(x, y)
-    # 在首次定位后记录位置
     win.initial_pos = win.pos()
 
     win.raise_()
