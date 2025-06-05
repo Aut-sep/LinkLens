@@ -1,4 +1,4 @@
-# frontend\float_window_app.py
+# frontend/float_window_app.py
 
 import sys
 import os
@@ -9,6 +9,12 @@ from urllib.parse import unquote_plus
 
 class FloatingWindow(QtWidgets.QWidget):
     def __init__(self, raw_arg=None):
+        # 如果 raw_arg 解码后是空字符串，就直接退出，不显示窗口
+        decoded_arg = unquote_plus(raw_arg or "")
+        if not decoded_arg:
+            QtWidgets.QApplication.quit()
+            return
+
         # 去掉标题栏、置顶、允许透明背景
         flags = QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint
         super().__init__(flags=flags)
@@ -111,7 +117,7 @@ class FloatingWindow(QtWidgets.QWidget):
                     self.setMaximumHeight(16777215)
 
                     # ——（5）锁定固定宽度 —— 
-                    fixed_w = 400
+                    fixed_w = 500
                     self.setFixedWidth(fixed_w)
 
                     # ——（6）手动计算“内容+padding”后的高度 —— 
@@ -197,12 +203,21 @@ class FloatingWindow(QtWidgets.QWidget):
 
 
 if __name__ == "__main__":
+    # 从命令行参数里取 raw_arg 并解码
     text = ""
     if len(sys.argv) > 1:
-        text = unquote_plus(sys.argv[1])
+        text = unquote_plus(sys.argv[1] or "")
+
+    # 如果 text 为空，则直接退出
+    if not text:
+        sys.exit(0)
 
     app = QtWidgets.QApplication(sys.argv)
     win = FloatingWindow(text)
+
+    # 如果 FloatingWindow 构造里已经 quit 了，就不用再 show 了
+    if not isinstance(win, FloatingWindow):
+        sys.exit(0)
 
     # 初次弹出时，先调整尺寸，再定位
     win.show()
