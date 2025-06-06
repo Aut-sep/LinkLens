@@ -15,37 +15,8 @@ class TextReader:
     def __init__(self):
         self.lock = Lock()
         self.keyboard = keyboard.Controller()
-        self.hotkey_listener = keyboard.GlobalHotKeys(
-            {
-                "<alt>+<shift>+q": self.trigger_read,
-                # "<alt>+<shift>+w": self.stop,
-            }
-        )
         # 标记：上一次成功读出的内容，用于去重
         self.last_fetched_text = None
-
-    def trigger_read(self):
-        """热键触发入口（增加异常保护，避免 read_selected_text 内部异常把整个线程打掉）"""
-        with self.lock:
-            try:
-                text = self.read_selected_text()
-            except Exception as e:
-                # 即便 read_selected_text 报错，也不让整个监听退出
-                print(f"❌ trigger_read 内部异常: {e}")
-                return
-
-            print(f"   — 读取到的文本: {repr(text)}")  # debug
-
-            try:
-                m = mouse.Controller()
-                x, y = m.position
-                print(f"   — 当前鼠标坐标: ({x}, {y})")
-            except Exception as e:
-                print(f"⚠️ 获取鼠标坐标失败: {e}")
-                x, y = None, None
-
-        # 无论 text 是空、URL 还是普通文本，都传给前端，由前端决定怎么处理
-        show_floating(text)
 
     def _is_url(self, text):
         """URL 验证方法"""
@@ -73,8 +44,8 @@ class TextReader:
         1) 先读 original；
         2) 写入随机占位符（UUID）并确认刷新；
         3) 模拟 Ctrl+C，并轮询等待剪贴板脱离占位符；
-        4) 判重：如果读到的内容 == 上次成功取到的文本，则视作“重复”，直接返回空；
-        5) 判若内容正好等于 placeholder 或者为空，都认为“未正确复制”；
+        4) 判重：如果读到的内容 == 上次成功取到的文本，则视作"重复"，直接返回空；
+        5) 判若内容正好等于 placeholder 或者为空，都认为"未正确复制"；
         6) 恢复原始剪贴板；返回 new_text（可能是空）。
         """
         try:
@@ -129,7 +100,7 @@ class TextReader:
             time.sleep(interval)
             elapsed += interval
 
-        # —— 步骤④：当 new_text 仍为 None，或 new_text == placeholder，或 new_text 为空时，都视为“未复制到有效文本”
+        # —— 步骤④：当 new_text 仍为 None，或 new_text == placeholder，或 new_text 为空时，都视为"未复制到有效文本"
         if not new_text or new_text == placeholder:
             if print_result:
                 print("\n⚠️ 未获取到有效内容")
@@ -140,17 +111,7 @@ class TextReader:
                 pass
             return ""
 
-        # # —— 步骤⑤：判重——如果与上次成功获取的文本一致，也认为“重复”，直接恢复原剪贴板并返回空
-        # if new_text == self.last_fetched_text:
-        #     if print_result:
-        #         print("\n⚠️ 内容与上次相同，视作无效")
-        #     try:
-        #         pyperclip.copy(original)
-        #     except Exception:
-        #         pass
-        #     return ""
-
-        # —— 截至这里，new_text 是“有效且与上次不同”的文本
+        # —— 截至这里，new_text 是"有效且与上次不同"的文本
         self.last_fetched_text = new_text
         if print_result:
             print(f"\n📝 读取到: {new_text}")
@@ -173,17 +134,17 @@ class TextReader:
                 pass
 
     def stop(self):
+        """只释放可能残留的按键，不再停止热键监听"""
         with self.lock:
             self.safe_release_keys()
-            self.hotkey_listener.stop()
-            print("\n🛑 热键监听已停止")
-
-    def run(self):
-        print("🔥 热键监听已启动 (Alt+Shift+Q)")
-        print("⏳ 现在可以选中文本后按热键读取")
-        self.hotkey_listener.start()
-        self.hotkey_listener.join()
 
 
 if __name__ == "__main__":
-    TextReader().run()
+    reader = TextReader()
+    print("🔥 文本读取器已初始化")
+    print("⏳ 现在可以选中文本后按热键读取")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n�� 程序被用户中断，正在退出...")

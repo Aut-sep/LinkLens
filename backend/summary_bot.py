@@ -40,6 +40,18 @@ class SummaryBot(BaseBot):
 
     def auto_summarize(self, text: str, title: str) -> Optional[str]:
         """文本总结入口"""
+        if getattr(self, "debug", False):
+            # 模拟网络请求延迟
+            time.sleep(2)
+            return (
+                "📝 模拟网页内容总结：\n\n"
+                "- 这是第一条重要信息，描述了文章的主要观点\n"
+                "- 第二条信息补充了更多细节，帮助理解核心内容\n"
+                "- 第三条信息提供了具体的例子和说明\n"
+                "- 第四条信息总结了文章的主要结论\n\n"
+                "【总结】这是一篇关于人工智能发展的文章，讨论了当前的技术进展和未来趋势。"
+            )
+
         cleaned_text = self.clean_text(text)
         try:
             messages = [
@@ -86,7 +98,7 @@ class SummaryBot(BaseBot):
             格式化后的摘要内容或None
         """
         if getattr(self, "debug", False):
-            # 模拟网络请求延迟，方便前端显示“加载中…”效果
+            # 模拟网络请求延迟，方便前端显示"加载中…"效果
             time.sleep(2)
             return (
                 "模拟测试摘要：\n"

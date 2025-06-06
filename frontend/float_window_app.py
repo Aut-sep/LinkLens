@@ -21,7 +21,7 @@ class FloatingWindow(QtWidgets.QWidget):
             QtWidgets.QApplication.quit()
             return
 
-        # 判断是否是“示例预览模式”
+        # 判断是否是"示例预览模式"
         is_preview = False
         preview_text = ""
         if decoded_arg.startswith("PREVIEW::"):
@@ -62,10 +62,10 @@ class FloatingWindow(QtWidgets.QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(container)
 
-        # 如果是“示例预览”模式
+        # 如果是"示例预览"模式
         if is_preview:
             self._apply_style_and_show(preview_text)
-            return  # 不进入“LOADING::”或轮询逻辑
+            return  # 不进入"LOADING::"或轮询逻辑
 
         # —— 否则，和原先代码保持一致：判断是 LOADING:: 还是 直接显示 —— #
         self._handle_arg(raw_arg)
@@ -75,7 +75,7 @@ class FloatingWindow(QtWidgets.QWidget):
 
     def _apply_style_and_show(self, text: str):
         """
-        专用于“PREVIEW::”模式：
+        专用于"PREVIEW::"模式：
         1) 从配置文件里读取字体/颜色/不透明度
         2) 应用到 QLabel 和窗口
         3) 直接 show() 并在屏幕右下角弹出示例
@@ -137,7 +137,7 @@ class FloatingWindow(QtWidgets.QWidget):
 
     def _handle_arg(self, raw_arg):
         """
-        如果 raw_arg 以 "LOADING::" 开头，就进入“加载中…”模式并启动轮询。
+        如果 raw_arg 以 "LOADING::" 开头，就进入"加载中…"模式并启动轮询。
         否则直接解码后显示完整文本。
         """
         decoded_arg = unquote_plus(raw_arg or "")
@@ -147,6 +147,8 @@ class FloatingWindow(QtWidgets.QWidget):
                 uuid_str = parts[1]
                 tmp_path = os.path.join(tempfile.gettempdir(), f"float_{uuid_str}.txt")
                 self.label.setText("加载中…")
+                # 应用样式设置
+                self._apply_style()
                 # 轮询定时器
                 self._timer = QtCore.QTimer(self)
                 self._timer.setInterval(300)
@@ -155,13 +157,42 @@ class FloatingWindow(QtWidgets.QWidget):
             else:
                 # 格式异常，直接当普通显示
                 self.label.setText(decoded_arg)
+                self._apply_style()
         else:
             # 普通模式，直接显示
             self.label.setText(decoded_arg)
+            self._apply_style()
+
+    def _apply_style(self):
+        """应用样式设置到标签和窗口"""
+        # 1. 读取当前配置
+        font_family = "Sans Serif"
+        font_size = 12
+        font_color = "#FFFFFF"
+        window_opacity = 0.8
+
+        try:
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    font_family = cfg.get("font_family", font_family)
+                    font_size = cfg.get("font_size", font_size)
+                    font_color = cfg.get("font_color", font_color)
+                    window_opacity = cfg.get("window_opacity", window_opacity)
+        except:
+            pass  # 如有任何错误，用默认
+
+        # 2. 设置标签样式
+        font = QtGui.QFont(font_family, font_size)
+        self.label.setFont(font)
+        self.label.setStyleSheet(f"color: {font_color};")
+
+        # 3. 调整窗口整体不透明度
+        self.setWindowOpacity(window_opacity)
 
     def _check_temp_file(self, tmp_path):
         """
-        “加载中…”时定时轮询 tmp_path，如果文件内容有了，就更新 label 并调整大小、定位。
+        "加载中…"时定时轮询 tmp_path，如果文件内容有了，就更新 label 并调整大小、定位。
         """
         try:
             if os.path.exists(tmp_path):
@@ -170,6 +201,8 @@ class FloatingWindow(QtWidgets.QWidget):
                 if content:
                     # 更新文字
                     self.label.setText(content)
+                    # 应用样式设置
+                    self._apply_style()
                     # 停止轮询
                     if self._timer:
                         self._timer.stop()
@@ -213,8 +246,8 @@ class FloatingWindow(QtWidgets.QWidget):
                             y = geo.top() + 5
                     self.move(x, y)
 
-        except Exception:
-            pass  # 出错也不影响后续轮询
+        except Exception as e:
+            print(f"❌ 检查临时文件时出错: {e}")  # 添加错误日志
 
     def showEvent(self, event: QtGui.QShowEvent):
         super().showEvent(event)
@@ -224,6 +257,19 @@ class FloatingWindow(QtWidgets.QWidget):
             self.initial_pos = self.pos()
 
     def focusOutEvent(self, event: QtGui.QFocusEvent):
+        # 加载设置
+        try:
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    wait_content = cfg.get("wait_content", False)
+                    # 如果启用了等待内容加载完成，且内容未加载完成，则不关闭窗口
+                    if wait_content and self.label.text() == "加载中…":
+                        event.ignore()
+                        return
+        except:
+            pass  # 如有任何错误，用默认行为
+
         # 失去焦点就自动关闭
         self.close()
         super().focusOutEvent(event)
@@ -237,7 +283,9 @@ class FloatingWindow(QtWidgets.QWidget):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent):
-        if getattr(self, "_drag_active", False) and (event.buttons() & QtCore.Qt.LeftButton):
+        if getattr(self, "_drag_active", False) and (
+            event.buttons() & QtCore.Qt.LeftButton
+        ):
             new_pos = event.globalPos() - self._drag_start_pos
             self.move(new_pos)
             event.accept()

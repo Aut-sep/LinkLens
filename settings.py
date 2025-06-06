@@ -4,10 +4,12 @@ import os
 import json
 import sys
 
+
 class Settings:
     """
     使用 JSON 文件存储配置。默认路径：~/.linklens/config.json
     """
+
     def __init__(self, filename="config.json"):
         self.config_dir = os.path.join(os.path.expanduser("~"), ".linklens")
         os.makedirs(self.config_dir, exist_ok=True)
@@ -19,12 +21,14 @@ class Settings:
             "ARK_API_KEY": "",
             "VOLC_ACCESSKEY": "",
             "VOLC_SECRETKEY": "",
+            "XFYUN_APP_ID": "",
+            "XFYUN_API_KEY": "",
             "model": "",  # 如果留空，则可在程序里自动判断或使用默认值
             "font_family": "Sans Serif",
             "font_size": 12,
             "font_color": "#FFFFFF",
             "window_opacity": 0.8,
-            "autostart": False  # 如果 True，则创建开机启动文件
+            "autostart": False,  # 如果 True，则创建开机启动文件
         }
         self._load()
 
