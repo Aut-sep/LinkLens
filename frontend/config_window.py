@@ -21,6 +21,9 @@ class ConfigWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("LinkLens 配置")
         self.resize(500, 550)
 
+        # 添加标志，防止初始化时触发示例悬浮窗
+        self._is_initializing = True
+
         # —— 0. 加载或创建 Settings 实例 —— #
         self.settings = Settings()
 
@@ -32,12 +35,14 @@ class ConfigWindow(QtWidgets.QMainWindow):
         v_layout.setSpacing(12)
 
         # —— 2. "关闭时隐藏到托盘" 复选框 —— #
+        # —— 2. "关闭时隐藏到托盘" 复选框 —— #
         self.hide_on_close_checkbox = QtWidgets.QCheckBox("关闭时隐藏到托盘")
         hide_flag = self.settings.get("hide_on_close", True)
         self.hide_on_close_checkbox.setChecked(hide_flag)
         v_layout.addWidget(self.hide_on_close_checkbox)
         self.hide_on_close_checkbox.stateChanged.connect(self.on_hide_on_close_changed)
 
+        # —— 3. "热键设置" —— #
         # —— 3. "热键设置" —— #
         hotkey_label = QtWidgets.QLabel("快捷键")
         v_layout.addWidget(hotkey_label)
@@ -49,7 +54,11 @@ class ConfigWindow(QtWidgets.QMainWindow):
         v_layout.addWidget(self.hotkey_edit)
 
         # 提示标签：显示"有效"或"无效"
+        # 提示标签：显示"有效"或"无效"
         self.hotkey_status_label = QtWidgets.QLabel()
+        self.hotkey_status_label.setAlignment(
+            QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter
+        )
         self.hotkey_status_label.setAlignment(
             QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter
         )
@@ -195,7 +204,8 @@ class ConfigWindow(QtWidgets.QMainWindow):
         self.opacity_label = QtWidgets.QLabel(f"{saved_opacity}%")
         opacity_hbox.addWidget(self.opacity_label)
         style_layout.addRow("窗口不透明度 (Opacity)：", opacity_hbox)
-        self.opacity_slider.valueChanged.connect(self.on_style_changed)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_value_changed)
+        self.opacity_slider.sliderReleased.connect(self.on_opacity_slider_released)
 
         style_group.setLayout(style_layout)
         v_layout.addWidget(style_group)
@@ -212,8 +222,8 @@ class ConfigWindow(QtWidgets.QMainWindow):
         self._create_tray_icon()
         self._is_hidden_to_tray = False
 
-        # —— 10. 初始化样式——第二次调用 on_style_changed，以展示初始示例浮窗 —— #
-        QtCore.QTimer.singleShot(200, self.on_style_changed)
+        # 初始化完成，允许触发示例悬浮窗
+        self._is_initializing = False
 
     # —— 功能设置相关 —— #
     def _on_feature_changed(self, state):
@@ -250,10 +260,13 @@ class ConfigWindow(QtWidgets.QMainWindow):
         """
         用户修改热键后执行：
         1) 验证是否能被 pynput 正确解析并注册（"是否有效"）
+        用户修改热键后执行：
+        1) 验证是否能被 pynput 正确解析并注册（"是否有效"）
         2) 如果有效则把它存到 setting，并发出 hotkeyChanged 信号
         """
         seq = self.hotkey_edit.keySequence()
         key_str = seq.toString(QtGui.QKeySequence.NativeText)
+        # QKeySequenceEmpty 时让它显示"无效"
         # QKeySequenceEmpty 时让它显示"无效"
         if seq.isEmpty():
             self.hotkey_status_label.setText("当前热键：<未设置>")
@@ -284,6 +297,7 @@ class ConfigWindow(QtWidgets.QMainWindow):
             self.hotkeyChanged.emit(pynput_str)
         except Exception as e:
             # 如果有异常（如格式不支持），就认为"无效"
+            # 如果有异常（如格式不支持），就认为"无效"
             self.hotkey_status_label.setText(f"无效：{e}")
             self.hotkey_status_label.setStyleSheet("color: red;")
 
@@ -293,12 +307,14 @@ class ConfigWindow(QtWidgets.QMainWindow):
         只处理常见修饰符+单键字母/数字/功能键，复杂组合可能无法解析。
         """
         parts = qt_seq_str.split("+")
+        parts = qt_seq_str.split("+")
         mapping = {
             "Ctrl": "ctrl",
             "Control": "ctrl",
             "Alt": "alt",
             "Shift": "shift",
             "Cmd": "cmd",
+            "Meta": "cmd",
             "Meta": "cmd",
         }
         out_parts = []
@@ -314,6 +330,7 @@ class ConfigWindow(QtWidgets.QMainWindow):
                 key = part.lower()
                 # 如果是功能键 F1~F35，pynput 支持 "f1" 之类
                 out_parts.append(key)
+        return "+".join(out_parts)
         return "+".join(out_parts)
 
     # —— API Key 相关 —— #
@@ -339,22 +356,20 @@ class ConfigWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.information(
             self, "提示", f"已自动检测并设置模型：{default}"
         )
+        QtWidgets.QMessageBox.information(
+            self, "提示", f"已自动检测并设置模型：{default}"
+        )
 
     # —— 界面风格相关 —— #
 
     def on_style_changed(self, *_):
         """
-        当字体、字号、颜色或不透明度其中一个变化时调用：
-        1. 保存到 settings.json
-        2. 调用浮窗预览示例文字
+        当字体、字号、颜色变化时调用（不包括不透明度滑块）
         """
-        # 1) 保存字体、字号
         fam = self.font_combo.currentFont().family()
         size = self.font_size_spin.value()
         self.settings.set("font_family", fam)
         self.settings.set("font_size", size)
-
-        # 2) 保存字体颜色
         color = self.font_color_edit.text().strip()
         self.settings.set("font_color", color)
 
@@ -363,9 +378,9 @@ class ConfigWindow(QtWidgets.QMainWindow):
         self.settings.set("window_opacity", opacity)
         self.opacity_label.setText(f"{self.opacity_slider.value()}%")
 
-        # 4) 弹出悬浮窗预览示例文字
-        #    通过约定：如果参数以 "PREVIEW::" 开头，float_window_app.py 会将其识别为"只需要展示一次示例"。
-        show_floating("PREVIEW::示例文字")
+        # 只在非初始化状态下弹出示例悬浮窗
+        if not getattr(self, "_is_initializing", False):
+            show_floating("PREVIEW::示例文字")
 
     def on_pick_color(self):
         """弹出 QColorDialog，选好颜色后保存并触发 on_style_changed"""
@@ -381,6 +396,7 @@ class ConfigWindow(QtWidgets.QMainWindow):
 
     def on_autostart_changed(self, state):
         enable = state == QtCore.Qt.Checked
+        enable = state == QtCore.Qt.Checked
         self.settings.set("autostart", enable)
         self._update_autostart(enable)
 
@@ -391,6 +407,9 @@ class ConfigWindow(QtWidgets.QMainWindow):
         python_exe = sys.executable
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         main_py = os.path.join(project_root, "main.py")
+        startup_dir = os.path.join(
+            os.getenv("APPDATA"), r"Microsoft\Windows\Start Menu\Programs\Startup"
+        )
         startup_dir = os.path.join(
             os.getenv("APPDATA"), r"Microsoft\Windows\Start Menu\Programs\Startup"
         )
@@ -406,11 +425,17 @@ class ConfigWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(
                     self, "开机自启", f"创建启动脚本失败：{e}"
                 )
+                QtWidgets.QMessageBox.warning(
+                    self, "开机自启", f"创建启动脚本失败：{e}"
+                )
         else:
             try:
                 if os.path.exists(autostart_path):
                     os.remove(autostart_path)
             except Exception as e:
+                QtWidgets.QMessageBox.warning(
+                    self, "开机自启", f"删除启动脚本失败：{e}"
+                )
                 QtWidgets.QMessageBox.warning(
                     self, "开机自启", f"删除启动脚本失败：{e}"
                 )
@@ -420,10 +445,13 @@ class ConfigWindow(QtWidgets.QMainWindow):
     def on_hide_on_close_changed(self, state):
         """同步"关闭时隐藏到托盘"选项到配置"""
         hide_flag = state == QtCore.Qt.Checked
+        """同步"关闭时隐藏到托盘"选项到配置"""
+        hide_flag = state == QtCore.Qt.Checked
         self.settings.set("hide_on_close", hide_flag)
 
     def closeEvent(self, event: QtGui.QCloseEvent):
         """
+        根据"关闭时隐藏到托盘"复选框决定：隐藏或退出。
         根据"关闭时隐藏到托盘"复选框决定：隐藏或退出。
         """
         if self.hide_on_close_checkbox.isChecked():
@@ -471,6 +499,16 @@ class ConfigWindow(QtWidgets.QMainWindow):
             QtWidgets.QSystemTrayIcon.Information,
             2000,
         )
+
+    def on_opacity_value_changed(self, value):
+        # 只更新label和保存设置，不弹预览
+        opacity = value / 100.0
+        self.settings.set("window_opacity", opacity)
+        self.opacity_label.setText(f"{value}%")
+
+    def on_opacity_slider_released(self):
+        # 松手时弹出预览悬浮窗
+        show_floating("PREVIEW::示例文字")
 
 
 if __name__ == "__main__":

@@ -233,19 +233,14 @@ class ImageExtractor:
             formatted.append(f"- 图片 {idx}: {img}")
         return "\n".join(formatted)
 
-    def get_image_summary(self, url: str) -> str:
-        """获取并格式化图片信息"""
+    def get_image_summary(self, url: str) -> list:
+        """获取图片URL列表"""
         if getattr(self, "debug", False):
             # 模拟网络请求延迟
             time.sleep(2)
-            return (
-                "🖼️ 模拟图片信息：\n\n"
-                "- 图片1：https://example.com/image1.jpg\n"
-                "- 图片2：https://example.com/image2.jpg\n"
-                "- 图片3：https://example.com/image3.jpg"
-            )
-
-        if not (images := self.extract_images(url)):
-            return "未找到符合要求的图片"
-
-        return "\n".join(f"- 图片 {i+1}: {img}" for i, img in enumerate(images))
+            return [
+                "https://picsum.photos/400/300",
+                "https://picsum.photos/400/301",
+                "https://picsam.photos/400/303",
+            ]
+        return self.extract_images(url) or []

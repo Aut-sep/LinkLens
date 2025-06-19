@@ -134,17 +134,13 @@ class MainProcessor(QtCore.QObject):
 
                 # 如果启用了图片提取
                 if self.settings.get("extract_image", True):
-                    if self.debug:
-                        print("🔧 Debug模式：使用模拟图片信息")
-                        image_summary = self.image_extractor.get_image_summary(text)
-                        if image_summary:
-                            summary += f"\n\n{image_summary}"
+                    images = self.image_extractor.get_image_summary(text)
+                    if images:
+                        print(f"🖼️ 找到 {len(images)} 张图片")
+                        for img_url in images:
+                            summary += f"\n{img_url}"
                     else:
-                        if image_summary := self.image_extractor.get_image_summary(
-                            text
-                        ):
-                            print(f"🖼️ 图片信息:\n{image_summary}")
-                            summary += f"\n\n{image_summary}"
+                        print("❌ 未找到符合要求的图片")
 
                 # 如果启用了音频内容总结
                 if self.settings.get("summarize_audio", True):

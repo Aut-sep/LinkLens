@@ -9,8 +9,8 @@ from urllib.parse import quote_plus
 import logging
 
 # 讯飞语音转写API配置
-APP_ID = os.getenv("XFYUN_APP_ID")
-API_KEY = os.getenv("XFYUN_API_KEY")
+APP_ID = os.getenv("APP_ID")
+API_KEY = os.getenv("API_KEY")
 
 if not APP_ID or not API_KEY:
     raise ValueError("请设置环境变量 XFYUN_APP_ID 和 XFYUN_API_KEY")

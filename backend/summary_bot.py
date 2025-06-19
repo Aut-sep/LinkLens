@@ -44,7 +44,7 @@ class SummaryBot(BaseBot):
             # 模拟网络请求延迟
             time.sleep(2)
             return (
-                "📝 模拟网页内容总结：\n\n"
+                "📝 模拟内容总结：\n\n"
                 "- 这是第一条重要信息，描述了文章的主要观点\n"
                 "- 第二条信息补充了更多细节，帮助理解核心内容\n"
                 "- 第三条信息提供了具体的例子和说明\n"
@@ -88,41 +88,3 @@ class SummaryBot(BaseBot):
         return "\n".join(
             [line.strip() for line in clean_text.split("\n") if line.strip()]
         )
-
-    def get_summary(self, url: str) -> Optional[str]:
-        """
-        公共方法：获取URL内容的摘要
-        Args:
-            url: 要摘要的URL
-        Returns:
-            格式化后的摘要内容或None
-        """
-        if getattr(self, "debug", False):
-            # 模拟网络请求延迟，方便前端显示"加载中…"效果
-            time.sleep(2)
-            return (
-                "模拟测试摘要：\n"
-                "- 核心内容要点总结1\n"
-                "- 核心内容要点总结2\n"
-                "- 核心内容要点总结3\n"
-                "- 核心内容要点总结4\n"
-                "- 核心内容要点总结5\n"
-                "【总结】测试用模拟摘要，这段文字共计约70 tokens"
-            )
-
-        try:
-            # 获取网页内容
-            response = requests.get(url)
-            response.raise_for_status()
-
-            # 提取标题和正文
-            soup = BeautifulSoup(response.text, "html.parser")
-            title = soup.title.string if soup.title else "无标题"
-            text = soup.get_text()
-
-            # 调用自动摘要
-            return self.auto_summarize(text, title)
-
-        except Exception as e:
-            print(f"{Fore.RED}获取摘要失败: {str(e)}")
-            return None
