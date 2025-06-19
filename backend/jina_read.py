@@ -59,11 +59,3 @@ class JinaReader:
         """获取URL内容并返回"""
         with self.lock:
             return self.fetch_content(url)
-
-
-if __name__ == "__main__":
-    url = "https://www.163.com/news/article/K15J6CV2000189FH.html"
-    if content := JinaReader().get_content(url):
-        print(f"✅ 获取成功:\n{content}")
-    else:
-        print("⚠️ 未能获取内容")

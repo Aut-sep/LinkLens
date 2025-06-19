@@ -29,36 +29,25 @@ class MainProcessor(QtCore.QObject):
     def __init__(self):
         super().__init__()
         print("🔄 初始化 MainProcessor...")
-
-        # 加载设置
         self.settings = Settings()
-        # 设置debug模式
         self.debug = self.settings.get("debug", False)
         if self.debug:
             print("🔧 Debug模式已启用")
-
         self.text_reader = TextReader()
         print("✅ TextReader 初始化完成")
-
-        self.summary_bot = SummaryBot()
+        self.summary_bot = SummaryBot(settings=self.settings)
         self.summary_bot.debug = self.debug
         print("✅ SummaryBot 初始化完成")
-
         self.jina_reader = JinaReader()
         print("✅ JinaReader 初始化完成")
-
         self.image_extractor = ImageExtractor()
         self.image_extractor.debug = self.debug
         print("✅ ImageExtractor 初始化完成")
-
         self.audio_extractor = AudioExtractor()
         self.audio_extractor.debug = self.debug
         print("✅ AudioExtractor 初始化完成")
-
-        self.speech_recognizer = XunfeiSpeechRecognizer()
+        self.speech_recognizer = XunfeiSpeechRecognizer(settings=self.settings)
         print("✅ SpeechRecognizer 初始化完成")
-
-        # 初始热键由 settings.json 决定
         initial_hotkey = self.settings.get("hotkey", "Alt+Shift+Q")
         self._register_hotkey_listener(initial_hotkey)
 

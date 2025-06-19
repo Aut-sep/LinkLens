@@ -9,8 +9,8 @@ from urllib.parse import quote_plus
 import logging
 
 # 讯飞语音转写API配置
-APP_ID = os.getenv("APP_ID")
-API_KEY = os.getenv("API_KEY")
+APP_ID = os.getenv("XFYUN_APP_ID")
+API_KEY = os.getenv("XFYUN_API_KEY")
 
 if not APP_ID or not API_KEY:
     raise ValueError("请设置环境变量 XFYUN_APP_ID 和 XFYUN_API_KEY")
@@ -143,43 +143,150 @@ def get_task_result(order_id):
 
 
 class XunfeiSpeechRecognizer:
-    def __init__(self):
+    def __init__(self, settings=None):
         self.logger = logging.getLogger(__name__)
+        self.settings = settings
+        if self.settings:
+            self.app_id = self.settings.get("XFYUN_APP_ID", "")
+            self.api_key = self.settings.get("XFYUN_API_KEY", "")
+        else:
+            self.app_id = ""
+            self.api_key = ""
+
+    def refresh_keys(self):
+        if self.settings:
+            self.app_id = self.settings.get("XFYUN_APP_ID", "")
+            self.api_key = self.settings.get("XFYUN_API_KEY", "")
+        else:
+            self.app_id = ""
+            self.api_key = ""
+
+    def md5(self, text):
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+    def generate_signa(self, app_id, ts, secret_key):
+        base_string = app_id + str(ts)
+        md5_digest = self.md5(base_string)
+        hmac_digest = hmac.new(
+            secret_key.encode("utf-8"),
+            md5_digest.encode("utf-8"),
+            digestmod=hashlib.sha1,
+        ).digest()
+        signa = base64.b64encode(hmac_digest).decode()
+        return signa
+
+    def upload_audio(self, audio_file, file_size, duration):
+        logger = self.logger
+        ts = int(time.time())
+        signa = self.generate_signa(self.app_id, ts, self.api_key)
+        params = {
+            "appId": self.app_id,
+            "ts": ts,
+            "signa": signa,
+            "fileName": os.path.basename(audio_file),
+            "fileSize": file_size,
+            "duration": duration,
+            "language": "cn",
+            "audioMode": "fileStream",
+            "standardWav": 0,
+        }
+        query_string = "&".join(
+            [f"{k}={quote_plus(str(v))}" for k, v in params.items()]
+        )
+        request_url = f"https://raasr.xfyun.cn/v2/api/upload?{query_string}"
+        logger.info(f"[上传] 请求URL: {request_url}")
+        logger.info(
+            f"[上传] 读取音频文件: {audio_file}，大小: {file_size} bytes，时长估计: {duration} ms"
+        )
+        with open(audio_file, "rb") as f:
+            audio_data = f.read()
+        headers = {"Content-Type": "application/octet-stream"}
+        try:
+            logger.info("[上传] 发送请求中...")
+            response = requests.post(request_url, data=audio_data, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+            logger.info("[上传] 响应结果:")
+            logger.info(json.dumps(result, indent=2, ensure_ascii=False))
+            if result.get("code") == "000000":
+                order_id = result.get("content", {}).get("orderId")
+                if order_id:
+                    logger.info(f"[上传] 上传成功，订单ID: {order_id}")
+                    return order_id
+                else:
+                    logger.error("[上传] 订单ID未获取到")
+            else:
+                logger.error(f"[上传] 上传失败: {result.get('descInfo')}")
+            return None
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"[上传] HTTP错误! 状态码: {e.response.status_code}")
+            logger.error(f"[上传] 响应内容: {e.response.text}")
+            return None
+        except Exception as e:
+            logger.error(f"[上传] 异常发生: {e}")
+            return None
+
+    def get_task_result(self, order_id):
+        logger = self.logger
+        ts = int(time.time())
+        signa = self.generate_signa(self.app_id, ts, self.api_key)
+        params = {
+            "appId": self.app_id,
+            "ts": ts,
+            "signa": signa,
+            "orderId": order_id,
+            "resultType": "transfer",
+        }
+        query_string = "&".join(
+            [f"{k}={quote_plus(str(v))}" for k, v in params.items()]
+        )
+        request_url = f"https://raasr.xfyun.cn/v2/api/getResult?{query_string}"
+        logger.info(f"[查询] 请求URL: {request_url}")
+        try:
+            logger.info("[查询] 发送请求中...")
+            response = requests.post(request_url, files={})
+            response.raise_for_status()
+            result = response.json()
+            logger.info("[查询] 响应结果:")
+            logger.info(json.dumps(result, indent=2, ensure_ascii=False))
+            return result
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"[查询] HTTP错误! 状态码: {e.response.status_code}")
+            logger.error(f"[查询] 响应内容: {e.response.text}")
+            return None
+        except Exception as e:
+            logger.error(f"[查询] 异常发生: {e}")
+            return None
 
     def transcribe(self, audio_file_path):
+        self.refresh_keys()
+        if not self.app_id or not self.api_key:
+            print("[未配置讯飞API KEY，无法调用语音识别功能]")
+            return None
         self.logger.info(f"\n===== 识别流程开始，音频文件: {audio_file_path} =====")
         try:
             file_size = os.path.getsize(audio_file_path)
-            # 粗略估算时长，实际可根据采样率和音频格式调整
             duration = int(file_size / (16000 * 2)) * 1000
-
             print(f"📊 音频信息：")
             print(f"   - 文件大小：{file_size / 1024 / 1024:.2f} MB")
             print(f"   - 估算时长：{duration / 1000:.1f} 秒")
-
-            # Step 1: 上传音频
             print("\n📤 正在上传音频文件...")
-            order_id = upload_audio(audio_file_path, file_size, duration)
+            order_id = self.upload_audio(audio_file_path, file_size, duration)
             if not order_id:
                 print("❌ 音频上传失败")
                 return None
             print(f"✅ 音频上传成功，订单ID：{order_id}")
-
-            # Step 2: 轮询获取转写结果
             print("\n⏳ 开始转写处理...")
             max_attempts = 10
             for attempt in range(max_attempts):
                 print(f"🔄 第 {attempt + 1} 次尝试获取结果...")
-                result = get_task_result(order_id)
-
+                result = self.get_task_result(order_id)
                 if not result:
                     print("❌ 获取结果失败，5秒后重试")
                     time.sleep(5)
                     continue
-
                 order_info = result.get("content", {}).get("orderInfo", {})
                 status = order_info.get("status")
-
                 if status == 4:
                     print("✅ 转写完成，开始解析结果")
                     order_result = result.get("content", {}).get("orderResult")
@@ -220,10 +327,8 @@ class XunfeiSpeechRecognizer:
                     break
             else:
                 print("❌ 超过最大尝试次数，未获得结果")
-
         except Exception as e:
             print(f"❌ 发生异常：{e}")
-
         print("🏁 识别流程结束")
         return None
 

@@ -68,11 +68,3 @@ class AudioExtractor:
                 print(f"⚠️ 文件不存在，无法删除: {file_path}")
         except Exception as e:
             print(f"❌ 删除文件失败: {file_path}，错误信息: {e}")
-
-
-if __name__ == "__main__":
-    url = "https://tv.sohu.com/v/dXMvMzMxODY0NzMzLzY0NDU2MTg4NC5zaHRtbA==.html"
-    ae = AudioExtractor()
-    if audio_file := ae.extract_audio(url):
-        print(f"下载音频文件：{audio_file}")
-        # ae.delete_file(audio_file)  # 取消注释以测试删除功能

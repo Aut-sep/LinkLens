@@ -14,7 +14,8 @@ from common import BaseBot  # 改为绝对导入
 
 
 class ChatBot(BaseBot):
-    def __init__(self):
+    def __init__(self, settings=None):
+        super().__init__(settings)
         self.client = self._initialize_client()
         self.conversation_history: List[Dict[str, str]] = []
         # ... 保留原有聊天相关配置和初始化代码 ...
@@ -32,14 +33,16 @@ class ChatBot(BaseBot):
     def _initialize_client(self) -> Ark:
         """初始化火山引擎客户端"""
         try:
-            ak = os.getenv("VOLC_ACCESSKEY")
-            sk = os.getenv("VOLC_SECRETKEY")
-
+            if self.settings:
+                ak = self.settings.get("VOLC_ACCESSKEY", "")
+                sk = self.settings.get("VOLC_SECRETKEY", "")
+            else:
+                ak = ""
+                sk = ""
             if not ak or not sk:
                 raise ValueError(
-                    f"{Fore.RED}错误：请先设置环境变量 VOLC_ACCESSKEY 和 VOLC_SECRETKEY"
+                    f"{Fore.RED}错误：请在设置中填写 VOLC_ACCESSKEY 和 VOLC_SECRETKEY"
                 )
-
             return Ark(ak=ak, sk=sk, region="cn-beijing")
         except Exception as e:
             print(f"{Fore.RED}初始化失败: {str(e)}")
@@ -113,10 +116,17 @@ class ChatBot(BaseBot):
                 -self.config["max_history"] * 2 :
             ]
 
-    def start_chat(self):
-        """启动对话循环"""
-        print(f"{Fore.GREEN}\n Linklens 已启动...（输入 help 查看命令）")
+    def refresh_client(self):
+        self.client = self._initialize_client()
 
+    def start_chat(self):
+        self.refresh_client()
+        print(f"{Fore.GREEN}\n Linklens 已启动...（输入 help 查看命令）")
+        if not self.client:
+            print(
+                f"{Fore.RED}未配置API KEY，无法使用对话功能。请在设置中填写VOLC_ACCESSKEY和VOLC_SECRETKEY。"
+            )
+            return
         while True:
             try:
                 # 彩色输入提示

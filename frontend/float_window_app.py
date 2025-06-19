@@ -81,7 +81,6 @@ class FloatingWindow(QtWidgets.QWidget):
         if is_preview:
             self._apply_style_and_show(preview_text)
             return  # 不进入"LOADING::"或轮询逻辑
-            return  # 不进入"LOADING::"或轮询逻辑
 
         # —— 否则，和原先代码保持一致：判断是 LOADING:: 还是 直接显示 —— #
         self._handle_arg(raw_arg)
@@ -402,9 +401,6 @@ class FloatingWindow(QtWidgets.QWidget):
                             # 如果有文本内容，显示在文本标签中
                             if text_content:
                                 text_summary = "\n".join(text_content)
-                                # 限制文本长度，避免窗口过大
-                                if len(text_summary) > 300:
-                                    text_summary = text_summary[:300] + "..."
                                 self.label.setText(text_summary)
                             else:
                                 self.label.clear()

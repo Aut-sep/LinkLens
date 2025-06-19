@@ -125,7 +125,6 @@ class ConfigWindow(QtWidgets.QMainWindow):
 
         # VOLC_SECRETKEY
         self.volc_sk_edit = QtWidgets.QLineEdit()
-        self.volc_sk_edit.setEchoMode(QtWidgets.QLineEdit.Password)
         self.volc_sk_edit.setText(self.settings.get("VOLC_SECRETKEY", ""))
         api_layout.addRow("VOLC_SECRETKEY:", self.volc_sk_edit)
 
@@ -136,7 +135,6 @@ class ConfigWindow(QtWidgets.QMainWindow):
 
         # XFYUN_API_KEY
         self.xfyun_api_key_edit = QtWidgets.QLineEdit()
-        self.xfyun_api_key_edit.setEchoMode(QtWidgets.QLineEdit.Password)
         self.xfyun_api_key_edit.setText(self.settings.get("XFYUN_API_KEY", ""))
         api_layout.addRow("XFYUN_API_KEY:", self.xfyun_api_key_edit)
 

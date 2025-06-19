@@ -15,9 +15,9 @@ from backend.common import BaseBot
 
 
 class SummaryBot(BaseBot):
-    def __init__(self):
-        super().__init__()  # 初始化基类
-        self.client = self._initialize_client()  # 添加客户端初始化
+    def __init__(self, settings=None):
+        super().__init__(settings)  # 初始化基类
+        self.client = self._initialize_client()  # 允许为None
         self.timeout = 10  # 默认超时时间(秒)
         self.max_retries = 3  # 最大重试次数
         self.summary_config = {
@@ -34,12 +34,16 @@ class SummaryBot(BaseBot):
             ),
         }
 
+    def refresh_client(self):
+        self.client = self._initialize_client()
+
     def clean_text(self, raw_text: str) -> str:
         """文本清洗"""
         return re.sub(r"<.*?>|广告联系.*|\d{3}-\d{8}", "", raw_text)
 
     def auto_summarize(self, text: str, title: str) -> Optional[str]:
         """文本总结入口"""
+        self.refresh_client()
         if getattr(self, "debug", False):
             # 模拟网络请求延迟
             time.sleep(2)
@@ -51,6 +55,9 @@ class SummaryBot(BaseBot):
                 "- 第四条信息总结了文章的主要结论\n\n"
                 "【总结】这是一篇关于人工智能发展的文章，讨论了当前的技术进展和未来趋势。"
             )
+
+        if not self.client:
+            return "[未配置API KEY，无法调用总结功能]"
 
         cleaned_text = self.clean_text(text)
         try:
@@ -85,6 +92,10 @@ class SummaryBot(BaseBot):
     def _format_summary(self, raw_text: str) -> str:
         """统一处理输出格式"""
         clean_text = raw_text.replace("**", "").replace("#", "")
+        # 自动补\n：如果有"【总结】"且前面不是\n，则补上
+        idx = clean_text.find("【总结】")
+        if idx > 0 and clean_text[idx - 1] != "\n":
+            clean_text = clean_text[:idx] + "\n" + clean_text[idx:]
         return "\n".join(
             [line.strip() for line in clean_text.split("\n") if line.strip()]
         )
