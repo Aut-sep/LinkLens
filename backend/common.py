@@ -1,13 +1,25 @@
+# backend/common.py
+
 import os
 import sys
 from volcenginesdkarkruntime import Ark
 
+
 class BaseBot:
     """公共基础类"""
+
+    def __init__(self, settings=None):
+        self.settings = settings
+
     def _initialize_client(self) -> Ark:
         """共享的客户端初始化方法"""
-        ak = os.getenv("VOLC_ACCESSKEY")
-        sk = os.getenv("VOLC_SECRETKEY")
+        if self.settings:
+            ak = self.settings.get("VOLC_ACCESSKEY", "")
+            sk = self.settings.get("VOLC_SECRETKEY", "")
+        else:
+            ak = ""
+            sk = ""
         if not ak or not sk:
-            raise ValueError("请先设置环境变量 VOLC_ACCESSKEY 和 VOLC_SECRETKEY")
+            # 不抛异常，返回None
+            return None
         return Ark(ak=ak, sk=sk, region="cn-beijing")
